@@ -1,0 +1,19 @@
+digraph G {
+	overlap=scale splines=true
+	edge [fontsize=12]
+	node [fillcolor="#cae6df" shape=circle style=filled]
+	node [shape=box style=""]
+	eno [label=eno]
+	fbp [label=fbp]
+	yeaD [label=yeaD]
+	fbaA [label=fbaA]
+	pgi [label=pgi]
+	pgk [label=pgk]
+	tpiA [label=tpiA]
+	pgi -> fbaA [label="0.691\np-val: 0.00"]
+	pgk -> eno [label="0.369\np-val: 0.00"]
+	fbaA -> eno [label="0.517\np-val: 0.00"]
+	tpiA -> fbp [label="0.642\np-val: 0.00"]
+	fbaA -> yeaD [label="0.750\np-val: 0.00"]
+	tpiA -> yeaD [label="-0.201\np-val: 0.01"]
+}
