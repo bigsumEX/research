@@ -45,5 +45,44 @@
 
 ### 構成
 <pre>
-❯ tree /f
+.
+├── README.md
+├── data
+│   ├── AI_E.coli_LS5218_qPCRデータ.xlsx
+│   └── qPCR(相対値)_対数増殖期.csv
+├── function
+│   ├── SEM.py
+│   ├── app_sem.py
+│   └── sem_plot.py
+├── main.py
+├── output
+│   ├── causalnex
+│   │   ├── 4.22_causalnex.png
+│   │   ├── 4.22_causalnex_th0.23.png
+│   │   ├── 4.22_causalnex_th0.25.png
+│   │   ├── 4.22_threshold.png
+│   │   ├── 4.23_causalnex_1.png
+│   │   └── 4.23_causalnex_2.png
+│   ├── output.xlsx
+│   └── sem
+│       ├── 0.0_semopy
+│       ├── 0.0_semopy.png
+│       ├── 1.0_semopy
+│       ├── 1.0_semopy.png
+│       ├── 2.0_semopy
+│       ├── 2.0_semopy.png
+│       ├── 3.0_semopy
+│       ├── 3.0_semopy.png
+│       ├── 4.0_semopy
+│       └── 4.0_semopy.png
+└── work
+    ├── app.pkl
+    ├── best_sm_2024.pkl
+    ├── bio_sample_code.ipynb
+    ├── bio_torch_CausalNex_2024.ipynb
+    ├── pareto_data_real.csv
+    ├── pareto_graph_real.png
+    ├── semopy
+    ├── semopy.png
+    └── test.ipynb
 </pre>
