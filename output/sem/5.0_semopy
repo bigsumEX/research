@@ -1,0 +1,22 @@
+digraph G {
+	overlap=scale splines=true
+	edge [fontsize=12]
+	node [fillcolor="#cae6df" shape=circle style=filled]
+	node [shape=box style=""]
+	fbaB [label=fbaB]
+	malx [label=malx]
+	pgm [label=pgm]
+	ytjc [label=ytjc]
+	gapA [label=gapA]
+	glk [label=glk]
+	ptsG [label=ptsG]
+	yihX [label=yihX]
+	ptsG -> yihX [label="0.658\np-val: 0.00"]
+	yihX -> glk [label="0.670\np-val: 0.00"]
+	yihX -> malx [label="0.645\np-val: 0.00"]
+	ptsG -> pgm [label="0.513\np-val: 0.00"]
+	gapA -> pgm [label="0.419\np-val: 0.00"]
+	yihX -> ytjc [label="0.428\np-val: 0.00"]
+	glk -> ytjc [label="0.426\np-val: 0.00"]
+	ptsG -> fbaB [label="0.491\np-val: 0.00"]
+}

@@ -62,10 +62,12 @@ def run_SEM(data, dag_matrix, threshold, target=None):
     objective_function_value = opt.optimize()
         
     # SEMの統計情報を収集
-    stats = sm.gather_statistics(opt)
+    # stats = sm.gather_statistics(opt)
+
+    stats = sm.calc_stats(model)
     
     # SEMのモデル、評価指標、およびエッジの統計情報を返す        
-    return model, np.round([stats.rmsea, stats.gfi, stats.agfi, stats.aic], 5), inspect(opt)
+    return model, stats, inspect(opt)
 
 def detect_subgraph(connection_matrix, target):
     """接続行列からアウトカムが含まれるサブグラフのノードを抽出
