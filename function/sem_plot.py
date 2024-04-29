@@ -1,21 +1,30 @@
 import pandas as pd
-from function.SEM import run_SEM
+
 from openpyxl import Workbook
-from openpyxl.drawing.image import Image
+from PIL import Image
 
-def sem_plot_to_excel(obj, num=10 , excel_file="./output/output.xlsx"):
+from function.SEM import run_SEM
+import semopy
+import os
 
+
+def sem_plot(obj, num=10, filename="./output/sem/output.xlsx"):
     df = obj.study.trials_dataframe()
-    df = df[["number", "value", "params_lasso_beta","params_ridge_beta", "params_threshold"]]
-    df.columns = ["number", "value", "lasso_beta", "ridge_beta", "threshold"]
-
+    df = df[["number", "value", "params_beta", "params_w_threshold", "user_attrs_best_sm"]]
+    df.columns = ["number", "result", "beta", "w_threshold", "user_attrs"]
     df = pd.concat([df, obj.df_stats.reset_index(drop=True)], axis=1)
-    #昇順の場合：asceding=False
-    df_top = df.sort_values("value").head(num)
-    # ソートされた順番に応じてnumber列を書き換える
-    df_top["number"] = range(0, num)
-    df_result = df_top.loc[:, :"threshold"]
+
+    df = df.drop('Value', axis=1)
+    df = df.dropna()
+
+    #昇順の場合：ascending=False
+    #インデックスを振り直す: ignore_index=True
+    df_top = df.sort_values("result",ignore_index=True, ascending=False).head(num)
+    df_top = df_top.drop("user_attrs", axis=1)
+
+    df_result = df_top.loc[:, :"w_threshold"]
     df_stats = df_top.loc[:, "DoF":]
+    print(df_top)
 
     # Excelファイルを作成
     wb = Workbook()
@@ -28,7 +37,7 @@ def sem_plot_to_excel(obj, num=10 , excel_file="./output/output.xlsx"):
     for r_idx, row in enumerate(df_result.itertuples(), start=2):
         for c_idx, value in enumerate(row[1:], start=1):
             ws.cell(row=r_idx, column=c_idx, value=value)
-
+    
     # カラム名を書き込む
     ws.append(list(df_stats.columns))
     # DataFrameをExcelに書き込む
@@ -36,19 +45,31 @@ def sem_plot_to_excel(obj, num=10 , excel_file="./output/output.xlsx"):
         for c_idx, value in enumerate(row[1:], start=1):
             ws.cell(row=r_idx, column=c_idx, value=value)
 
-    # SEMのグラフを挿入
-    for index, row in df_top.iterrows():
-        sem_graph_path = f"./output/sem/{float(row.number)}_semopy.png"
-        
-        # 新しいシートを作成し、各行のデータフレームを書き込む
-        ws_new = wb.create_sheet(title=f"SEM Result {float(row.number)}")
-        ws_new.append(list(df_top.columns))
-        row_data = [row[col] for col in df_top.columns]
-        ws_new.append(row_data) 
-        # SEMのグラフを挿入
-        img = Image(sem_graph_path)
-        img.anchor = ws_new.cell(row=3, column=1).coordinate
-        ws_new.add_image(img)
 
-    # Excelファイルを保存
-    wb.save(excel_file)
+    for row in df_top.iterrows():
+         # 新しいシートを作成し、各行のデータフレームを書き込む
+        ws_new = wb.create_sheet(title="SEM Result {}".format(int(row[1]['number'])))
+        ws_new.append(list(df_top.columns))
+
+        row_data = [row[1][col] for col in df_top.columns]
+        ws_new.append(row_data)
+        sm_SEM = run_SEM(obj.df, obj.matrix_list[int(row[1]["number"])], row[1]["w_threshold"])       
+        
+        img_path = f"./output/sem/{int(row[1]['number'])}_semopy.png"
+        semopy.semplot(sm_SEM[0], img_path,
+                                    engine="dot",        # 階層的なグラフを生成するエンジン(デフォルト)
+                                    plot_covs=True,      # Ture: 共分散がプロット
+                                    std_ests=True)       # Ture: 標準化された推定値をプロット
+        
+        # 画像を対応するシートに挿入します
+        img = Image.open(img_path)
+        img_cell = f"A{len(df_top) + 8}"  # 画像を挿入するセルを指定します。必要に応じて調整してください
+        ws.add_image(img, img_cell)
+
+    wb.save(filename)
+
+    # 後処理：一時ファイルを削除します
+    for _, row in df_top.iterrows():
+        img_path = f"./output/sem/{int(row[1]['number'])}_semopy.png"
+        if os.path.exists(img_path):
+            os.remove(img_path)

@@ -1,0 +1,11 @@
+digraph G {
+	overlap=scale splines=true
+	edge [fontsize=12]
+	node [fillcolor="#cae6df" shape=circle style=filled]
+	node [shape=box style=""]
+	ytjc [label=ytjc]
+	malx [label=malx]
+	pgm [label=pgm]
+	pgm -> malx [label="0.559\np-val: 0.00"]
+	malx -> ytjc [label="0.637\np-val: 0.00"]
+}

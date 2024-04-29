@@ -1,0 +1,9 @@
+digraph G {
+	overlap=scale splines=true
+	edge [fontsize=12]
+	node [fillcolor="#cae6df" shape=circle style=filled]
+	node [shape=box style=""]
+	pykA [label=pykA]
+	crr [label=crr]
+	crr -> pykA [label="0.708\np-val: 0.00"]
+}

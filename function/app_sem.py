@@ -2,6 +2,7 @@ import pandas as pd
 import numpy as np
 
 from causalnex.structure.pytorch import from_pandas
+from causalnex.structure.notears import from_pandas_lasso
 from causalnex.structure import StructureModel
 import optuna
 
@@ -21,22 +22,20 @@ class APP_SEM:
     
     def objective(self, trial):
         # Optunaでチューニングするハイパーパラメータ
-        threshold = trial.suggest_float('threshold', 0.2, 0.4)
-        lasso_beta = trial.suggest_float('lasso_beta', 1e-2, 1e-1, log=True)  # ログスケールでlassoの値を探索
-        ridge_beta = trial.suggest_float('ridge_beta', 1e-2, 1e-1, log=True)  # リッジ正則化の係数を探索
+        beta = trial.suggest_float('beta', 1e-2, 1e-1)
+        w_threshold = trial.suggest_float('w_threshold', 0.2, 0.3)
 
         # StructureModelのインスタンスを作成
         sm = StructureModel()
 
         # NOTEARSアルゴリズムを用いて構造学習を実施
-        # ここでfrom_pandasのパラメータをOptunaのtrialを通してチューニング
-        sm = from_pandas(self.df, 
-                        lasso_beta=lasso_beta,
-                        ridge_beta=ridge_beta,
-                        )
-        
-        #from_pandasで学習した後に閾値を探索する
-        sm.remove_edges_below_threshold(threshold)
+        # ここでfrom_pandaslassoのパラメータbetaをOptunaのtrialを通してチューニング
+        sm = from_pandas_lasso(
+            self.df,
+            beta = beta, # L1 penalty の強さ
+        )
+
+        sm.remove_edges_below_threshold(w_threshold)
         #構造をDAG構造に修正
         sm.threshold_till_dag()
         sm_l = sm.get_largest_subgraph()
@@ -49,33 +48,26 @@ class APP_SEM:
 
         #run_SEMを実行
         try:
-            _, stats, _ = run_SEM(self.df, connection_matrix, threshold)
-            self.df_stats = pd.concat([self.df_stats, stats])
+            _, stats, _ = run_SEM(self.df, connection_matrix, w_threshold)
             # 学習された構造のスコアを計算（スコアリング方法はプロジェクトにより異なる）
-            rmsea = stats["RMSEA"]["Value"]
-            gfi = stats["GFI"]["Value"]
-            agfi = stats["AGFI"]["Value"]
-            aic = stats["AIC"]["Value"]
 
-            # rmseaが0.0の場合も2.0に設定
-            if rmsea == 0.0:
-                rmsea = float("nan")
-            elif gfi == 1:
-                gfi = float("nan")
-            elif agfi == 1:
-                agfi = float("nan")
+            stats.loc[stats["RMSEA"]["Value"] == 0.0, ("RMSEA", "Value")] = float("nan")
+            stats.loc[stats["GFI"]["Value"] == 1.0, ("GFI", "Value")] = float("nan")
+            stats.loc[stats["AGFI"]["Value"] == 1.0, ("AGFI", "Value")] = float("nan")
+            stats.loc[stats["AIC"]["Value"] == 0.0, ("AIC", "Value")] = float("nan")
                 
         except Exception as e:
             print(traceback.format_exc())
             #SEM学習時にエラーを吐かれた場合は、rmsea値を2.0としエラー回避する。
-            rmsea = float("nan")
-            gfi = float("nan")
-            agfi = float("nan")
-            aic = float("nan")
-
-        self.score_list.append([rmsea, gfi, agfi, aic])
+            stats["RMSEA"]["Value"] = float("nan")
+            stats["GFI"]["Value"] = float("nan")
+            stats["AGFI"]["Value"] = float("nan")
+            stats["AIC"]["Value"] = float("nan")
+        
+        result = stats["AGFI"]["Value"]
+        self.df_stats = pd.concat([self.df_stats, stats])
         trial.set_user_attr('best_sm', sm)
-        return rmsea, gfi
+        return result
     
     def sm_to_dag_matrix(self, sm: StructureModel):
         """smの因果グラフを接続行列に変換する
@@ -122,7 +114,7 @@ class APP_SEM:
     def fit(self, n_trials=100):
         # スコア(エッジの数)を最大化するように設定
         #RMSEAの場合:minimize, #GFI,AGFIの場合:maximize
-        self.study = optuna.create_study(direction='minimize')
+        self.study = optuna.create_study(direction='maximize')
         self.study.optimize(self.objective, n_trials)
         # ログ非表示
         optuna.logging.set_verbosity(optuna.logging.WARNING)
@@ -159,7 +151,7 @@ class APP_SEM:
                 if i == 1:
                     columns_name_str = 'trial_no,rmsea,gfi'
                 data_list = []
-                
+
                 data_list.append(trial.number)
                 rmsea_value = trial.values[0]
                 aic_value = trial.values[1]
