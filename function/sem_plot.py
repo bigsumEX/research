@@ -1,8 +1,7 @@
 import pandas as pd
 
 from openpyxl import Workbook
-from PIL import Image
-
+from openpyxl.drawing.image import Image  # ここを修正
 from function.SEM import run_SEM
 import semopy
 import os
@@ -62,14 +61,14 @@ def sem_plot(obj, num=10, filename="./output/sem/output.xlsx"):
                                     std_ests=True)       # Ture: 標準化された推定値をプロット
         
         # 画像を対応するシートに挿入します
-        img = Image.open(img_path)
-        img_cell = f"A{len(df_top) + 8}"  # 画像を挿入するセルを指定します。必要に応じて調整してください
-        ws.add_image(img, img_cell)
+        img = Image(img_path)  # ここを修正
+        img.anchor = ws_new.cell(row=3, column=1).coordinate
+        ws_new.add_image(img)
 
     wb.save(filename)
 
-    # 後処理：一時ファイルを削除します
-    for _, row in df_top.iterrows():
-        img_path = f"./output/sem/{int(row[1]['number'])}_semopy.png"
-        if os.path.exists(img_path):
-            os.remove(img_path)
+    # # 後処理：一時ファイルを削除します
+    # for row in df_top.iterrows():
+    #     img_path = f"./output/sem/{int(row[1]['number'])}_semopy.png"
+    #     if os.path.exists(img_path):
+    #         os.remove(img_path)

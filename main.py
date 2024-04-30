@@ -4,7 +4,7 @@ import pickle
 
 def main():
     app = APP_SEM()
-    app.fit(n_trials=100)
+    app.fit(n_trials=10)
     # app.pareto_trial(n_trials=100)
 
     # モデルを保存
@@ -15,7 +15,7 @@ def main():
     with open('./output/pkl/app.pkl_from_pandas_lasso_agfi', 'rb') as file:
         loaded_app = pickle.load(file)
 
-    sem_plot(loaded_app, num=10, filename='./output/pkl/app.pkl_from_pandas_lasso_agfi.xlsx')
+    sem_plot(loaded_app, num=3, filename='./output/excel/from_pandas_lasso_agfi.xlsx')
 
 if __name__ == "__main__":
     main()

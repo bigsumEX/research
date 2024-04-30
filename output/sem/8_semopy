@@ -1,0 +1,19 @@
+digraph G {
+	overlap=scale splines=true
+	edge [fontsize=12]
+	node [fillcolor="#cae6df" shape=circle style=filled]
+	node [shape=box style=""]
+	gpmM [label=gpmM]
+	malx [label=malx]
+	pfkA [label=pfkA]
+	ppsA [label=ppsA]
+	ytjc [label=ytjc]
+	crr [label=crr]
+	pykA [label=pykA]
+	crr -> pykA [label="0.708\np-val: 0.00"]
+	pykA -> ytjc [label="0.424\np-val: 0.00"]
+	pykA -> ppsA [label="0.587\np-val: 0.00"]
+	pykA -> pfkA [label="0.573\np-val: 0.00"]
+	pykA -> gpmM [label="0.635\np-val: 0.00"]
+	pykA -> malx [label="0.412\np-val: 0.00"]
+}
