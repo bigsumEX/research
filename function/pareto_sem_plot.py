@@ -1,23 +1,6 @@
 import pandas as pd
-<<<<<<< HEAD
-from function.SEM import run_SEM
-from openpyxl import Workbook
-from openpyxl.drawing.image import Image
+import numpy as np
 
-def sem_plot_to_excel(obj, num=10 , excel_file="./output/output.xlsx"):
-
-    df = obj.study.trials_dataframe()
-    df = df[["number", "value", "params_lasso_beta","params_ridge_beta", "params_threshold"]]
-    df.columns = ["number", "value", "lasso_beta", "ridge_beta", "threshold"]
-
-    df = pd.concat([df, obj.df_stats.reset_index(drop=True)], axis=1)
-    #昇順の場合：asceding=False
-    df_top = df.sort_values("value").head(num)
-    # ソートされた順番に応じてnumber列を書き換える
-    df_top["number"] = range(0, num)
-    df_result = df_top.loc[:, :"threshold"]
-    df_stats = df_top.loc[:, "DoF":]
-=======
 from openpyxl import Workbook
 from openpyxl.drawing.image import Image  # ここを修正
 from function.SEM import run_SEM
@@ -25,17 +8,18 @@ import semopy
 import os
 
 
-def sem_plot(obj, num=10, filename="./output/sem/output.xlsx"):
+def pareto_sem_plot(obj, num=10, filename="./output/excel/output.xlsx"):
     df = obj.study.trials_dataframe()
     df_stats = obj.df_stats
 
-    df = df[["number", "value", "params_lasso_beta","params_ridge_beta", "params_threshold"]]
-    df.columns = ["number", "result", "lasso_beta", "ridge_beta", "threshold"]
-    print(df.columns)
+    print('='*20)
+
+    df = df[["number", "values_0", "values_1", "params_lasso_beta","params_ridge_beta", "params_threshold"]]
+    df.columns = ["number", "result_0", "result_1", "lasso_beta", "ridge_beta", "threshold"]
 
     # df = df[["number", "value", "params_beta", "params_threshold"]]
     # df.columns = ["number", "result", "beta", "threshold"]
-    df = df.dropna()
+    df = df.replace([float(1e10), -float(1e10)], np.nan).dropna()
     df_stats = df_stats.dropna()
 
     df.reset_index(drop=True, inplace=True)
@@ -45,13 +29,13 @@ def sem_plot(obj, num=10, filename="./output/sem/output.xlsx"):
 
     #昇順の場合：ascending=False
     #インデックスを振り直す: ignore_index=True
-    df_top = df.sort_values("result").head(num)
+    df_top = df.sort_values(by=["result_0", "result_1"], ascending=[True, False]).head(num)
 
     df_result = df_top.loc[:, :"threshold"]
     df_stats = df_top.loc[:, "DoF":]
-    
->>>>>>> origin/master
 
+    # print(df_top)
+    
     # Excelファイルを作成
     wb = Workbook()
     ws = wb.active
@@ -63,11 +47,7 @@ def sem_plot(obj, num=10, filename="./output/sem/output.xlsx"):
     for r_idx, row in enumerate(df_result.itertuples(), start=2):
         for c_idx, value in enumerate(row[1:], start=1):
             ws.cell(row=r_idx, column=c_idx, value=value)
-<<<<<<< HEAD
-
-=======
     
->>>>>>> origin/master
     # カラム名を書き込む
     ws.append(list(df_stats.columns))
     # DataFrameをExcelに書き込む
@@ -75,39 +55,25 @@ def sem_plot(obj, num=10, filename="./output/sem/output.xlsx"):
         for c_idx, value in enumerate(row[1:], start=1):
             ws.cell(row=r_idx, column=c_idx, value=value)
 
-<<<<<<< HEAD
-    # SEMのグラフを挿入
-    for index, row in df_top.iterrows():
-        sem_graph_path = f"./output/sem/{float(row.number)}_semopy.png"
-        
-        # 新しいシートを作成し、各行のデータフレームを書き込む
-        ws_new = wb.create_sheet(title=f"SEM Result {float(row.number)}")
-        ws_new.append(list(df_top.columns))
-        row_data = [row[col] for col in df_top.columns]
-        ws_new.append(row_data) 
-        # SEMのグラフを挿入
-        img = Image(sem_graph_path)
-        img.anchor = ws_new.cell(row=3, column=1).coordinate
-        ws_new.add_image(img)
-
-    # Excelファイルを保存
-    wb.save(excel_file)
-=======
-
     for row in df_top.iterrows():
+        trial_number = int(row[1]['number'])
+
          # 新しいシートを作成し、各行のデータフレームを書き込む
-        ws_new = wb.create_sheet(title="SEM Result {}".format(int(row[1]['number'])))
+        ws_new = wb.create_sheet(title="SEM Result {}".format(trial_number))
         ws_new.append(list(df_top.columns))
 
         row_data = [row[1][col] for col in df_top.columns]
         ws_new.append(row_data)
-        sm_SEM = run_SEM(obj.df, obj.matrix_list[int(row[1]["number"])], row[1]["threshold"])       
+        sm_SEM = run_SEM(obj.df, obj.matrix_dict[trial_number], row[1]["threshold"])       
         
-        img_path = f"./output/sem/{int(row[1]['number'])}_semopy.png"
+        img_path = f"./output/sem/{trial_number}_semopy.png"
+        # print(sm_SEM[0].inspect())
+
         semopy.semplot(sm_SEM[0], img_path,
                                     engine="dot",        # 階層的なグラフを生成するエンジン(デフォルト)
                                     plot_covs=True,      # Ture: 共分散がプロット
-                                    std_ests=True)       # Ture: 標準化された推定値をプロット
+                                    std_ests=True,        # Ture: 標準化された推定値をプロット
+        )
         
         # 画像を対応するシートに挿入します
         img = Image(img_path)  # ここを修正
@@ -118,7 +84,6 @@ def sem_plot(obj, num=10, filename="./output/sem/output.xlsx"):
 
     # 後処理：一時ファイルを削除します
     for row in df_top.iterrows():
-        img_path = f"./output/sem/{int(row[1]['number'])}_semopy.png"
+        img_path = f"./output/sem/{trial_number}_semopy.png"
         if os.path.exists(img_path):
             os.remove(img_path)
->>>>>>> origin/master

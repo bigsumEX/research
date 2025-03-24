@@ -4,8 +4,10 @@ import numpy as np
 from causalnex.structure.pytorch import from_pandas
 from causalnex.structure import StructureModel
 import optuna
+from optuna.samplers import MOTPESampler
+from optuna.exceptions import TrialPruned
 
-from sklearn.preprocessing import MinMaxScaler
+from sklearn.preprocessing import MinMaxScaler, StandardScaler
 from function.SEM import run_SEM
 import traceback
 
@@ -13,70 +15,84 @@ import traceback
 class APP_SEM:
     def __init__(self):
         self.data_load()
-        self.sm_list = []
-        self.matrix_list = []
-        self.score_list = []
+        self.sm_list = []  # 辞書に変更
+        self.matrix_dict = {}  # 辞書に変更
         self.df_stats = pd.DataFrame()
 
-    
+
     def objective(self, trial):
         # Optunaでチューニングするハイパーパラメータ
-        threshold = trial.suggest_float('threshold', 0.2, 0.4)
-        lasso_beta = trial.suggest_float('lasso_beta', 1e-2, 1e-1, log=True)  # ログスケールでlassoの値を探索
-        ridge_beta = trial.suggest_float('ridge_beta', 1e-2, 1e-1, log=True)  # リッジ正則化の係数を探索
+        # beta = trial.suggest_float('beta', 1e-2, 1e-1)
+        lasso_beta = trial.suggest_float('lasso_beta', 1e-2, 1e-1,  log=True)
+        ridge_beta = trial.suggest_float('ridge_beta', 1e-2, 1e-1, log=True)
+        threshold = trial.suggest_float('threshold', 0.2, 0.6)
 
         # StructureModelのインスタンスを作成
         sm = StructureModel()
 
         # NOTEARSアルゴリズムを用いて構造学習を実施
-        # ここでfrom_pandasのパラメータをOptunaのtrialを通してチューニング
-        sm = from_pandas(self.df, 
-                        lasso_beta=lasso_beta,
-                        ridge_beta=ridge_beta,
-                        )
-        
-        #from_pandasで学習した後に閾値を探索する
+        # ここでfrom_pandaslassoのパラメータbetaをOptunaのtrialを通してチューニング
+        sm = from_pandas(
+            self.df,
+            # beta=beta
+            lasso_beta=lasso_beta,
+            ridge_beta = ridge_beta
+        )
+
         sm.remove_edges_below_threshold(threshold)
-        #構造をDAG構造に修正
-        sm.threshold_till_dag()
-        sm_l = sm.get_largest_subgraph()
-        self.sm_list.append(sm_l)
 
-        # view_graph_from_sm(sm, "a", False, True)
-        #smを接続行列に変換
-        connection_matrix = pd.DataFrame(self.sm_to_dag_matrix(sm_l))
-        self.matrix_list.append(connection_matrix)
-
-        #run_SEMを実行
         try:
-            _, stats, _ = run_SEM(self.df, connection_matrix, threshold)
+            # 構造をDAGに修正し、最大の部分グラフを取得
+            sm.threshold_till_dag()
+            sm_l = sm.get_largest_subgraph()
+
+            # smを隣接行列に変換
+            connection_matrix = pd.DataFrame(self.sm_to_dag_matrix(sm_l))
+            
+            #既存の行列と比較して同一であるか確認
+            for trial_number, existing_matrix in self.matrix_dict.items():
+                if connection_matrix.equals(existing_matrix):
+                    raise TrialPruned("既存の行列と重複したため、Trialを回避します")
+            
+            self.matrix_dict[trial.number] = connection_matrix  # 辞書に追加
+
+            print("隣接行列")
+            print("="*20)
+            print(connection_matrix)
+
+            try:
+                 _, stats, _ = run_SEM(self.df, connection_matrix, threshold)
+            except:
+                trial.set_user_attr('error', True)
+                raise TrialPruned("run_SEM実行時に異常を検知しました。Trialを回避します")
+
+            # 指標のチェックとエラーハンドリング
+            if stats["RMSEA"]["Value"] == 0.0 or stats["GFI"]["Value"] == 1.0 or stats["AGFI"]["Value"] == 1.0 or stats["AIC"]["Value"] == 0.0:
+                raise optuna.TrialPruned("評価指標に異常を検知しました。Trialを回避します")
+
+            elif stats["RMSEA"]["Value"] >= 0.15 or stats["GFI"]["Value"] <= 0.85 or stats["AGFI"]["Value"] <= 0.85 or stats["AIC"]["Value"] >= 100:
+                raise optuna.TrialPruned("評価指標が悪いため、Trialを回避します")
+
+
+            # 成功した場合の処理
+            
             self.df_stats = pd.concat([self.df_stats, stats])
-            # 学習された構造のスコアを計算（スコアリング方法はプロジェクトにより異なる）
-            rmsea = stats["RMSEA"]["Value"]
-            gfi = stats["GFI"]["Value"]
-            agfi = stats["AGFI"]["Value"]
-            aic = stats["AIC"]["Value"]
+            trial.set_user_attr('best_sm', sm_l)
+            self.sm_list.append(sm_l)
 
-            # rmseaが0.0の場合も2.0に設定
-            if rmsea == 0.0:
-                rmsea = float("nan")
-            elif gfi == 1:
-                gfi = float("nan")
-            elif agfi == 1:
-                agfi = float("nan")
-                
-        except Exception as e:
+            return stats["RMSEA"]["Value"], stats["AGFI"]["Value"]
+
+        except optuna.TrialPruned:
             print(traceback.format_exc())
-            #SEM学習時にエラーを吐かれた場合は、rmsea値を2.0としエラー回避する。
-            rmsea = float("nan")
-            gfi = float("nan")
-            agfi = float("nan")
-            aic = float("nan")
+            trial.set_user_attr('error', True)
+            return float(1e10), -float(1e10)  # Noneを避けるため、ペナルティ値を返す
+        
+        except Exception as e:
+            print(f"Unexpected error: {e}")
+            trial.set_user_attr('error', True)
+            # 高いペナルティ値で返す
+            return float(1e10), -float(1e10)  # Noneを避けるため、ペナルティ値を返す
 
-        self.score_list.append([rmsea, gfi, agfi, aic])
-        trial.set_user_attr('best_sm', sm)
-        return rmsea, gfi
-    
     def sm_to_dag_matrix(self, sm: StructureModel):
         """smの因果グラフを接続行列に変換する
 
@@ -87,7 +103,11 @@ class APP_SEM:
             np.array: 接続行列
         """
         # 因果グラフのノード数
-        nodes = sm.nodes
+        try:
+            nodes = sm.nodes
+        except:
+            return np.array([])
+            
         n = len(nodes)
 
         # ノード名をインデックスに変換する辞書
@@ -106,13 +126,14 @@ class APP_SEM:
 
         return df_connection_matrix
     
-    def data_load(self, path = './data/qPCR(相対値)_対数増殖期.csv', scaler=True):
+    def data_load(self, path = './data/qPCR(相対値)_定常期.csv', scaler=True):
         df = pd.read_csv(path, header=0)
         df = df.dropna()
         df = df.drop(['gene', '培養時間'], axis=1)
         df = df.reset_index(drop=True)
         if scaler:
-            scaler = MinMaxScaler()
+            # scaler = MinMaxScaler()
+            scaler = StandardScaler()
             normalized_data_array = scaler.fit_transform(df)
             # DataFrame型に変換
             df = pd.DataFrame(normalized_data_array, columns=df.columns)
@@ -123,57 +144,22 @@ class APP_SEM:
         # スコア(エッジの数)を最大化するように設定
         #RMSEAの場合:minimize, #GFI,AGFIの場合:maximize
         self.study = optuna.create_study(direction='minimize')
-        self.study.optimize(self.objective, n_trials)
+        self.study.optimize(self.objective, n_trials=n_trials, catch=(TrialPruned, Exception))
         # ログ非表示
         optuna.logging.set_verbosity(optuna.logging.WARNING)
 
     def pareto_trial(self, n_trials=100):
-        self.study = optuna.multi_objective.create_study(directions=['minimize', ',maximize'])
-        self.study.optimize(self.objective, n_trials)
+        self.study = optuna.create_study(
+            directions=['minimize', 'maximize'],
+            sampler=MOTPESampler()
+            )
+    
+        self.study.optimize(self.objective, n_trials=n_trials, catch=(TrialPruned, Exception))
         # ログ非表示
         optuna.logging.set_verbosity(optuna.logging.WARNING)
 
-        # 100回の試行で最適化
-        trials = {str(trial.values): trial for trial in self.study.get_trials()}
-        trials = list(trials.values())
+        print("Number of finished trials:", len(self.study.trials))
 
-        # グラフにプロットするため、目的変数をリストに格納する
-        rmsea_all_list = []
-        gfi_all_list = []
-
-        for i, trial in enumerate(self.trials, start=1):
-            rmsea_all_list.append(trial.values[0])
-            gfi_all_list.append(trial.values[1])
-
-        # パレート解の取得。get_pareto_front_trials()メソッドを使用
-        self.trials = {str(self.trial.values): self.trial for self.trial in self.study.get_pareto_front_trials()}
-        self.trials = list(self.trials.values())
-        self.trials.sort(key=lambda t: t.values)
-
-
-        # グラフプロット用にリストで取得。またパレート解の目的変数と説明変数をcsvに保存する
-        rmsea_list = []
-        aic_list = []
-        with open('./output/pareto_data_real.csv', 'w') as f:
-            for i, trial in enumerate(self.trials, start=1):
-                if i == 1:
-                    columns_name_str = 'trial_no,rmsea,gfi'
-                data_list = []
-                
-                data_list.append(trial.number)
-                rmsea_value = trial.values[0]
-                aic_value = trial.values[1]
-                rmsea_list.append(rmsea_value)
-                aic_list.append(aic_value)
-                data_list.append(rmsea_value)
-                data_list.append(aic_value)    
-                for key, value in trial.params.items():
-                    data_list.append(value)
-                    if i == 1:
-                        columns_name_str += ',' + key 
-                if i == 1:
-                    f.write(columns_name_str + '\n')
-                data_list = list(map(str, data_list))
-                data_list_str = ','.join(data_list)
-                f.write(data_list_str + '\n')
-
+        print("Pareto front")
+        for trial in self.study.best_trials:
+            print(f" Values: {trial.values}, Params: {trial.params}")

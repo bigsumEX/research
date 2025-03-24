@@ -1,5 +1,9 @@
 import numpy as np
 import semopy as sm
+<<<<<<< HEAD
+=======
+import pandas as pd
+>>>>>>> origin/master
 from semopy.inspector import inspect
 
 
@@ -33,6 +37,11 @@ def run_SEM(data, dag_matrix, threshold, target=None):
         各エッジのp値などをまとめたもの
     '''
 
+<<<<<<< HEAD
+=======
+    pd.options.display.float_format = '{:.10f}'.format
+
+>>>>>>> origin/master
     # DAGマトリクスの値が閾値を超える場合に1、そうでない場合に0の配列を作成
     array_dag_01data = (dag_matrix > threshold)*1
     
